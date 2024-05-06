@@ -190,20 +190,29 @@ func (h *Handler) ReadNote(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	row := h.DB.QueryRowContext(
+	tx, err := h.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	row := tx.QueryRowContext(
 		r.Context(),
-		`SELECT U.alias_id, N.rev_id, NR.content, NR.created_at, N.created_at, N.updated_at
+		`SELECT N.id, U.alias_id, U.id, N.rev_id, NREV.content, NREF.referent, NREV.created_at, N.created_at, N.updated_at
 			FROM notes AS N
-			JOIN note_revisions AS NR ON N.rev_id = NR.id
+			LEFT JOIN note_references AS NREF ON N.id = NREF.referrer
+			JOIN note_revisions AS NREV ON N.rev_id = NREV.id
 			JOIN users AS U ON U.id = N.user_id
 			WHERE N.id = ? AND N.is_deleted = 0;`,
 		noteId,
 	)
 	payload := new(NotePayload)
 	if err := row.Scan(
-		&payload.UserId,
+		&payload.Id,
+		&payload.User.Id,
+		&payload.User.Ulid,
 		&payload.Revision.Id,
 		&payload.Content,
+		&payload.InReplyTo,
 		&payload.Revision.CreatedAt,
 		&payload.CreatedAt,
 		&payload.UpdatedAt,

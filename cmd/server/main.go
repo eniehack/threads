@@ -53,7 +53,7 @@ func main() {
 		r.Post("/sessions/new", h.CreateSession)
 		r.Get("/notes/{noteId}", h.ReadNote)
 		r.Get("/notes/{noteId}/revisions", h.ReadNoteRevisions)
-		r.Get("/notes/{noteId}/reply", h.ReadChildReply)
+		r.Get("/notes/{noteId}/context", h.ReadChildReply)
 		r.Group(func(r chi.Router) {
 			r.Use(mymiddleware.CheckAuthzHeader(&mymiddleware.CheckAuthzConfig{
 				Paseto: h.Paseto,

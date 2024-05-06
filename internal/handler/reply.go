@@ -87,45 +87,127 @@ func (h *Handler) ReadChildReply(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	row := h.DB.QueryRowContext(
+	ancestors, err := h.DB.QueryContext(
 		r.Context(),
 		`WITH RECURSIVE r AS (
-			SELECT notes.*, note_references.*, 1 AS num
-			FROM notes
-			JOIN note_references ON note_references.referent = notes.id
-			WHERE notes.id = ?
-			
-		  UNION ALL
-			
-		  SELECT notes.*, note_references.*, num + 1
-			FROM notes, r
-			JOIN note_references ON note_references.referent = r.id
-			WHERE note_references.referrer = notes.id
+				SELECT NREF.*, 0 AS depth
+					FROM note_references AS NREF
+					WHERE NREF.id = ?
+		    UNION ALL
+		    SELECT NREF.*, depth + 1
+					FROM note_references AS NREF
+					INNER JOIN r
+					WHERE NREF.id = r.ancestor AND r.depth <= 100
 		)
-		SELECT r.id AS note_id, U.alias_id, r.created_at, r.updated_at, NREV.content, NREV.created_at
+		SELECT
+			r.ancestor,
+			N.id,
+			U.alias_id,
+			U.id,
+			NREV.content,
+			NREV.id,
+			N.created_at,
+			N.updated_at,
+			NREV.created_at
 		FROM r
-		JOIN note_revisions AS NREV ON NREV.id = r.rev_id
-		JOIN users AS U ON U.id = r.user_id;`,
+		JOIN notes AS N ON N.id = r.id
+		JOIN note_revisions AS NREV ON NREV.id = N.rev_id
+		JOIN users AS U ON U.id = N.user_id
+		WHERE N.is_deleted = FALSE;`,
 		noteId,
 	)
-	payload := new(NotePayload)
-	if err := row.Scan(
-		&payload.UserId,
-		&payload.Revision.Id,
-		&payload.Content,
-		&payload.Revision.CreatedAt,
-		&payload.CreatedAt,
-		&payload.UpdatedAt,
-	); err == sql.ErrNoRows {
+	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else if err != nil {
-		log.Printf("sql.scan: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	payload.Id = noteId
-	payload.Revision.Content = payload.Content
+
+	payload := new(ReplyPayload)
+	for ancestors.Next() {
+		note := new(NotePayload)
+		if err := ancestors.Scan(
+			&note.InReplyTo,
+			&note.Id,
+			&note.User.Id,
+			&note.User.Ulid,
+			&note.Content,
+			&note.Revision.Id,
+			&note.CreatedAt,
+			&note.UpdatedAt,
+			&note.Revision.CreatedAt,
+		); err != nil {
+			log.Printf("sql.scan: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		note.Revision.Content = note.Content
+		payload.Ancestors = append(payload.Ancestors, *note)
+	}
+
+	descendants, err := h.DB.QueryContext(
+		r.Context(),
+		`
+		WITH RECURSIVE r AS (
+				SELECT NREF.*, 0 AS depth
+					FROM note_references AS NREF
+					WHERE NREF.ancestor = ?
+				UNION ALL
+				SELECT NREF.*, depth + 1
+					FROM note_references AS NREF
+					INNER JOIN r
+					WHERE NREF.ancestor = r.id AND r.depth <= 100
+		)
+		SELECT
+			N.id,
+			r.ancestor,
+			U.alias_id,
+			U.id,
+			NREV.content,
+			NREV.id,
+			N.created_at,
+			N.updated_at,
+			NREV.created_at
+		FROM r
+		JOIN notes AS N
+			ON N.id = r.id
+		JOIN note_revisions AS NREV 
+			ON NREV.id = N.rev_id
+		JOIN users AS U 
+			ON U.id = N.user_id
+		WHERE N.is_deleted = FALSE;
+		`,
+		noteId,
+	)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	for descendants.Next() {
+		note := new(NotePayload)
+		if err := descendants.Scan(
+			&note.Id,
+			&note.InReplyTo,
+			&note.User.Id,
+			&note.User.Ulid,
+			&note.Content,
+			&note.Revision.Id,
+			&note.CreatedAt,
+			&note.UpdatedAt,
+			&note.Revision.CreatedAt,
+		); err != nil {
+			log.Printf("sql.scan: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		note.Revision.Content = note.Content
+		payload.Descendants = append(payload.Descendants, *note)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
