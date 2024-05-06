@@ -7,6 +7,7 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/eniehack/threads/internal/handler"
+	mymiddleware "github.com/eniehack/threads/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "modernc.org/sqlite"
@@ -35,8 +36,17 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	r.Route("/api/v0", func(r chi.Router) {
-		r.Post("/session/new", h.CreateSession)
-		r.Post("/note/new", h.CreateNote)
+		r.Post("/sessions/new", h.CreateSession)
+		r.Get("/notes/{noteId}", h.ReadNote)
+		r.Get("/notes/{noteId}/revisions", h.ReadNoteRevisions)
+		r.Group(func(r chi.Router) {
+			r.Use(mymiddleware.CheckAuthzHeader(&mymiddleware.CheckAuthzConfig{
+				Paseto: h.Paseto,
+			}))
+			r.Post("/notes/new", h.CreateNote)
+			r.Put("/notes/{noteId}", h.UpdateNote)
+			//r.Post("/note/{noteId}/reply", h.CreateReplyNote)
+		})
 	})
 	http.ListenAndServe(":3000", r)
 }
