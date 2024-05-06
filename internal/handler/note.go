@@ -96,7 +96,6 @@ func (h *Handler) CreateNote(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	log.Println(*userUlid)
 	now := time.Now()
 	revId := CreateRevisionId(now)
 	if err := createNoteRevision(
@@ -166,7 +165,6 @@ func (h *Handler) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Println(userId)
 
 	if err := createNoteRevision(
 		tx,
@@ -291,7 +289,6 @@ func (h *Handler) ReadNoteRevisions(w http.ResponseWriter, r *http.Request) {
 		}
 		payload = append(payload, *elem)
 	}
-	log.Println(payload)
 	if len(payload) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return
