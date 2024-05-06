@@ -152,19 +152,6 @@ func (h *Handler) UpdateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	revId := CreateRevisionId(now)
-	userAliasId, ok := r.Context().Value("userAliasId").(string)
-	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	userId, err := lookupUserUlid(tx, userAliasId, r.Context())
-	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	} else if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
 	if err := createNoteRevision(
 		tx,
