@@ -2,10 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 
 	"aidanwoods.dev/go-paseto"
+	"github.com/BurntSushi/toml"
 	"github.com/eniehack/threads/internal/handler"
 	mymiddleware "github.com/eniehack/threads/internal/middleware"
 	"github.com/go-chi/chi/v5"
@@ -13,8 +16,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type ConfigRoot struct {
+	Database string `toml:"database"`
+	Port     uint   `toml:"port"`
+}
+
 func main() {
-	db, err := sql.Open("sqlite", "./test.sqlite")
+	configFile := flag.String("f", "config.toml", "path of config file")
+	config := new(ConfigRoot)
+	_, err := toml.DecodeFile(*configFile, config)
+	if err != nil {
+		log.Fatalf("toml decode err: %v", err)
+	}
+	db, err := sql.Open("sqlite", config.Database)
 	if err != nil {
 		log.Fatalf("cannot open sqlite file: %v", err)
 		return
@@ -48,5 +62,5 @@ func main() {
 			//r.Post("/note/{noteId}/reply", h.CreateReplyNote)
 		})
 	})
-	http.ListenAndServe(":3000", r)
+	http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r)
 }

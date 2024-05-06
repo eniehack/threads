@@ -10,6 +10,7 @@ require (
 require (
 	aidanwoods.dev/go-paseto v1.5.1 // indirect
 	aidanwoods.dev/go-result v0.1.0 // indirect
+	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/alexedwards/argon2id v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/essentialkaos/branca/v2 v2.0.3 // indirect
