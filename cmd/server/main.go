@@ -53,13 +53,14 @@ func main() {
 		r.Post("/sessions/new", h.CreateSession)
 		r.Get("/notes/{noteId}", h.ReadNote)
 		r.Get("/notes/{noteId}/revisions", h.ReadNoteRevisions)
+		r.Get("/notes/{noteId}/reply", h.ReadChildReply)
 		r.Group(func(r chi.Router) {
 			r.Use(mymiddleware.CheckAuthzHeader(&mymiddleware.CheckAuthzConfig{
 				Paseto: h.Paseto,
 			}))
 			r.Post("/notes/new", h.CreateNote)
 			r.Put("/notes/{noteId}", h.UpdateNote)
-			//r.Post("/note/{noteId}/reply", h.CreateReplyNote)
+			r.Post("/notes/{noteId}/reply", h.CreateReply)
 		})
 	})
 	http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r)
