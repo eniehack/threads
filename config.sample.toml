@@ -1,0 +1,2 @@
+database = "./test.sqlite"
+port = 3000
