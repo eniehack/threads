@@ -17,6 +17,18 @@ func (s *NullString) MarshalJSON() ([]byte, error) {
 	}
 }
 
+func (s *NullString) UnmarshalJSON(data []byte) error {
+	var str string
+	json.Unmarshal(data, &str)
+	s.String = str
+	s.Valid = (str != "")
+	return nil
+}
+
+func NewNullString(s string) NullString {
+	return NullString{sql.NullString{String: s, Valid: s != ""}}
+}
+
 type UserPayload struct {
 	Id   string `json:"id"`
 	Ulid string `json:"ulid"`

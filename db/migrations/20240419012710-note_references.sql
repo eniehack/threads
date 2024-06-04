@@ -2,7 +2,7 @@
 -- +migrate Up
 CREATE TABLE note_references (
     id VARCHAR NOT NULL,
-    ancestor VARCHAR NOT NULL,
+    ancestor VARCHAR,
     FOREIGN KEY (ancestor) REFERENCES notes(id),
     FOREIGN KEY (id) REFERENCES notes(id)
 );

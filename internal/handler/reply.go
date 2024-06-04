@@ -3,82 +3,22 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"time"
 
+	"github.com/eniehack/threads/pkg/nullstring"
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/xid"
 )
 
-func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
-	referent := chi.URLParam(r, "noteId")
-	userAliasId, ok := r.Context().Value("userAliasId").(string)
-	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	payload := new(CreateNoteRequestParams)
-	if err := json.NewDecoder(r.Body).Decode(payload); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	tx, err := h.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		log.Printf("failed open tx: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	userUlid, err := lookupUserUlid(tx, userAliasId, r.Context())
-	if err != nil {
-		return
-	}
-	now := time.Now()
-	revId := CreateRevisionId(now)
-	if err = createNoteRevision(
-		tx,
-		r.Context(),
-		revId,
-		payload.Text,
-		now,
+func createNoteReference(tx *sql.Tx, id string, ancestor *nullstring.NullString) error {
+	if _, err := tx.Exec(
+		"INSERT INTO note_references(ancestor, id) VALUES (?, ?);",
+		ancestor,
+		id,
 	); err != nil {
-		log.Printf("failed exec insert note_rev: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
-	noteId := xid.New().String()
-	if err = createNote(
-		tx,
-		r.Context(),
-		noteId,
-		*userUlid,
-		revId,
-		now,
-	); err != nil {
-		log.Printf("failed exec insert note: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if _, err = tx.ExecContext(
-		r.Context(),
-		"INSERT INTO note_references(referent, referrer) VALUES (?, ?);",
-		referent,
-		noteId,
-	); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if err = tx.Commit(); err != nil {
-		log.Printf("failed commit tx: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Location", fmt.Sprintf("/api/v0/notes/%s", noteId))
-	w.WriteHeader(http.StatusCreated)
-	return
+	return nil
 }
 
 func (h *Handler) ReadChildReply(w http.ResponseWriter, r *http.Request) {
@@ -113,13 +53,13 @@ func (h *Handler) ReadChildReply(w http.ResponseWriter, r *http.Request) {
 		JOIN notes AS N ON N.id = r.id
 		JOIN note_revisions AS NREV ON NREV.id = N.rev_id
 		JOIN users AS U ON U.id = N.user_id
-		WHERE N.is_deleted = FALSE;`,
+		WHERE N.is_deleted = FALSE
+			AND N.id != ?;`,
+		noteId,
 		noteId,
 	)
-	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
+	if err != nil && err != sql.ErrNoRows {
+		log.Println("ancestors query err:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -176,14 +116,13 @@ func (h *Handler) ReadChildReply(w http.ResponseWriter, r *http.Request) {
 			ON NREV.id = N.rev_id
 		JOIN users AS U 
 			ON U.id = N.user_id
-		WHERE N.is_deleted = FALSE;
-		`,
+		WHERE N.is_deleted = FALSE
+			AND N.id != ?;`,
+		noteId,
 		noteId,
 	)
-	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
+	if err != nil && err != sql.ErrNoRows {
+		log.Println("descendants query err:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -215,5 +154,4 @@ func (h *Handler) ReadChildReply(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	return
 }

@@ -60,7 +60,6 @@ func main() {
 			}))
 			r.Post("/notes/new", h.CreateNote)
 			r.Put("/notes/{noteId}", h.UpdateNote)
-			r.Post("/notes/{noteId}/reply", h.CreateReply)
 		})
 	})
 	http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r)

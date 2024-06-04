@@ -10,13 +10,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eniehack/threads/pkg/nullstring"
 	"github.com/go-chi/chi/v5"
 	"github.com/oklog/ulid/v2"
 	"github.com/rs/xid"
 )
 
 type CreateNoteRequestParams struct {
-	Text string `json:"text"`
+	Text      string  `json:"text"`
+	InReplyTo *string `json:"in_reply_to"`
 }
 
 func lookupUserUlid(tx *sql.Tx, userAliasId string, ctx context.Context) (*string, error) {
@@ -122,6 +124,12 @@ func (h *Handler) CreateNote(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	inReplyTo := nullstring.New(payload.InReplyTo)
+	if err = createNoteReference(tx, noteId, &inReplyTo); err != nil {
+		log.Printf("failed exec insert note reference: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		log.Printf("failed commit tx: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -197,9 +205,9 @@ func (h *Handler) ReadNote(w http.ResponseWriter, r *http.Request) {
 	}
 	row := tx.QueryRowContext(
 		r.Context(),
-		`SELECT N.id, U.alias_id, U.id, N.rev_id, NREV.content, NREF.referent, NREV.created_at, N.created_at, N.updated_at
+		`SELECT N.id, U.alias_id, U.id, N.rev_id, NREV.content, NREF.ancestor, NREV.created_at, N.created_at, N.updated_at
 			FROM notes AS N
-			LEFT JOIN note_references AS NREF ON N.id = NREF.referrer
+			LEFT JOIN note_references AS NREF ON N.id = NREF.id
 			JOIN note_revisions AS NREV ON N.rev_id = NREV.id
 			JOIN users AS U ON U.id = N.user_id
 			WHERE N.id = ? AND N.is_deleted = 0;`,
