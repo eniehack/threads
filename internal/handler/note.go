@@ -137,7 +137,6 @@ func (h *Handler) CreateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", fmt.Sprintf("/api/v0/notes/%s", noteId))
 	w.WriteHeader(http.StatusCreated)
-	return
 }
 
 func (h *Handler) UpdateNote(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +188,6 @@ func (h *Handler) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-	return
 }
 
 func (h *Handler) ReadNote(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +239,6 @@ func (h *Handler) ReadNote(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	return
 }
 
 func (h *Handler) ReadNoteRevisions(w http.ResponseWriter, r *http.Request) {
@@ -289,5 +286,4 @@ func (h *Handler) ReadNoteRevisions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	return
 }
